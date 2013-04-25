@@ -74,8 +74,8 @@ class Celery(TaskSpec):
     """This class implements a celeryd task that is sent to the celery queue for
     completion."""
 
-    def __init__(self, parent, name, call, call_args=None, result_key=None,
-                 merge_results=False, **kwargs):
+    def __init__(self, parent, name, call, call_args=None, queue=None, 
+                result_key=None, merge_results=False, **kwargs):
         """Constructor.
 
         The args/kwargs arguments support Attrib classes in the parameters for
@@ -115,6 +115,7 @@ class Celery(TaskSpec):
         self.description = kwargs.pop('description', '')
         self.call = call
         self.args = call_args
+        self.queue = queue
         self.merge_results = merge_results
         skip = 'data', 'defines', 'pre_assign', 'post_assign', 'lock'
         self.kwargs = dict(i for i in kwargs.iteritems() if i[0] not in skip)
@@ -124,14 +125,16 @@ class Celery(TaskSpec):
     def _send_call(self, my_task):
         """Sends Celery asynchronous call and stores async call information for
         retrieval laster"""
-        arg, kwargs = None, None
+        args, kwargs, queue = None, None, None
         if self.args:
             args = _eval_args(self.args, my_task)
         if self.kwargs:
             kwargs = _eval_kwargs(self.kwargs, my_task)
+        if self.queue:
+            queue = valueof(my_task, self.queue)
         LOG.debug("%s (task id %s) calling %s" % (self.name, my_task.id,
                 self.call), extra=dict(data=dict(args=args, kwargs=kwargs)))
-        async_call = current_app().send_task(self.call, args=args, kwargs=kwargs)
+        async_call = current_app().send_task(self.call, args=args, kwargs=kwargs, queue=queue)
         my_task.internal_data['task_id'] = async_call.task_id
         my_task.internal_data['async_call'] = async_call
         LOG.debug("'%s' called: %s" % (self.call, async_call.task_id))
