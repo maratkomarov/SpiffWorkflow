@@ -173,7 +173,7 @@ class Task(object):
         self.state_history = [state]
         self.log = []
         self.task_spec = task_spec
-        self.id = uuid4()
+        self.id = str(uuid4())
         self.thread_id = self.__class__.thread_id_pool
         self.last_state_change = time.time()
         self.data = {}
