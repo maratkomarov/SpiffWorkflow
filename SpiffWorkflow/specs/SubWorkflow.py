@@ -34,6 +34,7 @@ class SubWorkflow(TaskSpec):
                  parent,
                  name,
                  file,
+                 serializer_cls=None,
                  in_assign = None,
                  out_assign = None,
                  **kwargs):
@@ -62,6 +63,10 @@ class SubWorkflow(TaskSpec):
         if file is not None:
             dirname   = os.path.dirname(parent.file)
             self.file = os.path.join(dirname, file)
+            if not serializer_cls:
+                from SpiffWorkflow.storage import XmlSerializer
+                serializer_cls = XmlSerializer
+            self.serializer_cls = serializer_cls
 
     def test(self):
         TaskSpec.test(self)
@@ -79,12 +84,11 @@ class SubWorkflow(TaskSpec):
             my_task._sync_children(outputs, my_task.state)
 
     def _create_subworkflow(self, my_task):
-        from SpiffWorkflow.storage import XmlSerializer
         from SpiffWorkflow.specs import WorkflowSpec
         file           = valueof(my_task, self.file)
-        serializer     = XmlSerializer()
-        xml            = open(file).read()
-        wf_spec        = WorkflowSpec.deserialize(serializer, xml, filename = file)
+        serializer     = self.serializer_cls()
+        s_state        = open(file).read()
+        wf_spec        = WorkflowSpec.deserialize(serializer, s_state, filename = file)
         outer_workflow = my_task.workflow.outer_workflow
         return SpiffWorkflow.Workflow(wf_spec, parent = outer_workflow)
 
