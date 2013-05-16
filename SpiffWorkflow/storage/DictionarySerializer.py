@@ -22,6 +22,22 @@ from SpiffWorkflow.specs import *
 from SpiffWorkflow.storage.Serializer import Serializer
 
 class DictionarySerializer(Serializer):
+    def _serialize_assign(self, assign):
+        return {
+            'left_attribute': assign.left_attribute,
+            'right_attribute': assign.right_attribute,
+            'right': assign.right
+        }
+
+    def _deserialize_assign(self, s_state):
+        return Assign(**s_state)
+
+    def _serialize_assign_list(self, thelist):
+        return [self._serialize_assign(assign) for assign in thelist]
+
+    def _deserialize_assign_list(self, s_state):
+        return [self._deserialize_assign(s_assign) for s_assign in s_state]
+
     def _serialize_dict(self, thedict):
         return dict((k, b64encode(marshal.dumps(v)))
                     for k, v in thedict.iteritems())
@@ -30,11 +46,11 @@ class DictionarySerializer(Serializer):
         return dict((k, marshal.loads(b64decode(v)))
                     for k, v in s_state.iteritems())
 
-    def _serialize_list(self, thedict):
-        return [(k, b64encode(marshal.dumps(v))) for k, v in thedict]
+    def _serialize_list(self, thelist):
+        return [b64encode(marshal.dumps(v)) for v in thelist]
 
     def _deserialize_list(self, s_state):
-        return [(k, b64decode(marshal.loads(v))) for k, v in s_state]
+        return [b64decode(marshal.loads(v)) for v in s_state]
 
     def _serialize_attrib(self, attrib):
         return attrib.name
@@ -176,7 +192,7 @@ class DictionarySerializer(Serializer):
         kwargs = self._serialize_dict(spec.kwargs)
         s_state = self._serialize_task_spec(spec)
         s_state['call'] = spec.call
-        s_state['args'] = args
+        s_state['args'] = self._serilize_list(args)
         s_state['kwargs'] = kwargs
         s_state['result_key'] = spec.result_key
         return s_state
@@ -274,13 +290,13 @@ class DictionarySerializer(Serializer):
 
     def _serialize_multi_instance(self, spec):
         s_state = self._serialize_task_spec(spec)
-        s_state['times'] = spec.times
+        s_state['times'] = self._serialize_arg(spec.times)
         return s_state
 
     def _deserialize_multi_instance(self, wf_spec, s_state):
         spec = MultiInstance(wf_spec,
                              s_state['name'],
-                             times=s_state['times'])
+                             times=self._deserialize_arg(s_state['times']))
         self._deserialize_task_spec(wf_spec, s_state, spec=spec)
         return spec
 
@@ -315,15 +331,15 @@ class DictionarySerializer(Serializer):
     def _serialize_sub_workflow(self, spec):
         s_state = self._serialize_task_spec(spec)
         s_state['file'] = spec.file
-        s_state['in_assign'] = self._serialize_dict(spec.in_assign)
-        s_state['out_assign'] = self._serialize_dict(spec.out_assign)
+        s_state['in_assign'] = self._serialize_assign_list(spec.in_assign)
+        s_state['out_assign'] = self._serialize_assign_list(spec.out_assign)
         return s_state
 
     def _deserialize_sub_workflow(self, wf_spec, s_state):
         spec = SubWorkflow(wf_spec, s_state['name'], s_state['file'])
         self._deserialize_task_spec(wf_spec, s_state, spec=spec)
-        spec.in_assign = self._deserialize_dict(s_state['in_assign'])
-        spec.out_assign = self._deserialize_dict(s_state['out_assign'])
+        spec.in_assign = self._deserialize_assign_list(s_state['in_assign'])
+        spec.out_assign = self._deserialize_assign_list(s_state['out_assign'])
         return spec
 
     def _serialize_thread_merge(self, spec):
@@ -495,7 +511,14 @@ class DictionarySerializer(Serializer):
         s_state['data'] = task.data
 
         # internal_data
-        s_state['internal_data'] = task.internal_data
+        s_state['internal_data'] = task.internal_data.copy()
+        '''
+        FIXME: this doesn't works, Workflow object should be serialized, to serialize the whole state to JSON
+        if 'subworkflow' in s_state['internal_data']:
+            s_state['internal_data']['subworkflow'] = self._serialize_workflow(s_state['internal_data']['subworkflow'])
+            print 'INTERNAL SUBWORKFLOW'
+            print s_state['internal_data']['subworkflow']
+        '''
 
         return s_state
 
@@ -527,6 +550,8 @@ class DictionarySerializer(Serializer):
         task.data = s_state['data']
 
         # internal_data
-        task.internal_data = s_state['internal_data']
+        #if 'subworkflow' in s_state['internal_data']:
+        #
+        task.internal_data = self._deserialize_dict(s_state['internal_data'])
 
         return task

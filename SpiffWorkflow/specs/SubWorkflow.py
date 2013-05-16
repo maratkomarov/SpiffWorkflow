@@ -62,10 +62,14 @@ class SubWorkflow(TaskSpec):
         self.out_assign = out_assign is not None and out_assign or []
         if file is not None:
             dirname   = os.path.dirname(parent.file)
-            self.file = os.path.join(dirname, file)
+            self.file = os.path.abspath(os.path.join(dirname, file))
             if not serializer_cls:
-                from SpiffWorkflow.storage import XmlSerializer
-                serializer_cls = XmlSerializer
+                if self.file.endswith('.wf'):
+                    from fam.workflow_ext.dsl import DslSerializer
+                    serializer_cls = DslSerializer
+                else:
+                    from SpiffWorkflow.storage import XmlSerializer
+                    serializer_cls = XmlSerializer
             self.serializer_cls = serializer_cls
 
     def test(self):
