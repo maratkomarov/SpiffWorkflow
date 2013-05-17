@@ -20,6 +20,10 @@ from SpiffWorkflow.operators import valueof
 from SpiffWorkflow.specs.TaskSpec import TaskSpec
 import SpiffWorkflow
 
+import logging
+
+LOG = logging.getLogger(__name__)
+
 class SubWorkflow(TaskSpec):
     """
     A SubWorkflow is a task that wraps a WorkflowSpec, such that you can
@@ -127,12 +131,17 @@ class SubWorkflow(TaskSpec):
         for child in my_task.children:
             if child.task_spec in self.outputs:
                 for assignment in self.out_assign:
+                    LOG.debug('Assign {2}.{0} from {3}.{1}'.format(
+                        assignment.left_attribute, assignment.right_attribute, 
+                        child, subworkflow
+                    ))
                     assignment.assign(subworkflow, child)
 
                 # Alright, abusing that hook is just evil but it works.
                 child.task_spec._update_state_hook(child)
 
     def _on_complete_hook(self, my_task):
+        print 'SubWorkflow._on_complete_hook: {0}'.format(my_task)
         for child in my_task.children:
             if child.task_spec in self.outputs:
                 continue

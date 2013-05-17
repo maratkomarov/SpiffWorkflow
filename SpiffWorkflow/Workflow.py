@@ -86,8 +86,10 @@ class Workflow(object):
         return [w for w in waiting]
 
     def _task_completed_notify(self, task):
-        if task.get_name() == 'End':
-            self.data.update(task.data)
+        #if task.get_name() == 'End':
+        #    self.data.update(task.data)
+        self.data.update(task.data)  # Update workflow data with each completed task's data
+        LOG.debug('data(%s): %s', self.spec.name, self.data)
         # Update the state of every WAITING task.
         for thetask in self._get_waiting_tasks():
             thetask.task_spec._update_state(thetask)

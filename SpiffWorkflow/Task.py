@@ -593,6 +593,7 @@ class Task(object):
             dbg += ' (%s)'   % self.get_description()
         dbg += ' State: %s'    % self.get_state_name()
         dbg += ' Children: %s' % len(self.children)
+        #dbg += ' Data: %s' % self.data
         if recursive:
             for child in self.children:
                 dbg += '\n' + child.get_dump(indent + 1)
