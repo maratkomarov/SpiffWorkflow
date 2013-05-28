@@ -141,7 +141,7 @@ class SubWorkflow(TaskSpec):
                 child.task_spec._update_state_hook(child)
 
     def _on_complete_hook(self, my_task):
-        print 'SubWorkflow._on_complete_hook: {0}'.format(my_task)
+        # print 'SubWorkflow._on_complete_hook: {0}'.format(my_task)
         for child in my_task.children:
             if child.task_spec in self.outputs:
                 continue
