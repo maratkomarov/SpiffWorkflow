@@ -240,6 +240,18 @@ class Celery(TaskSpec):
             else:
                 my_task.set_data(**data)
             return True
+        elif my_task.internal_data['async_call'].state == 'PROGRESS':
+            # currently the console outputs "WAITING" for this state
+            # so we expect to see "WAITING, 50%"
+            meta = my_task.internal_data['async_call'].result
+            try:
+                progress = meta["progress"]
+            except TypeError:
+                # WTF, the task was clearly setting meta to dict:
+                # progress = meta["percentage"]
+                # TypeError: string indices must be integers
+                LOG.debug("Meta: %s", meta)
+            my_task.progress = progress
         else:
             LOG.debug("async_call.ready()=%s. TryFire for '%s' "
                     "returning False" % (my_task.internal_data['async_call'].ready(),
