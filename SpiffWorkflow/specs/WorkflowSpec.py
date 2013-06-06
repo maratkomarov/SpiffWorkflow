@@ -32,7 +32,7 @@ class WorkflowSpec(object):
         """
         self.name = name or ''
         self.description = ''
-        self.file = os.path.abspath(filename)
+        self.file = os.path.abspath(filename) if filename else ''
         self.task_specs = dict()
         self.start = StartTask(self)
 
