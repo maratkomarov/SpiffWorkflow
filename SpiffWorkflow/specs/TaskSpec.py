@@ -14,10 +14,13 @@
 # License along with this library; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 import logging
+import sys
 
+
+import SpiffWorkflow
 from SpiffWorkflow.util.event import Event
 from SpiffWorkflow.Task import Task
-from SpiffWorkflow.exceptions import WorkflowException
+from SpiffWorkflow.exceptions import WorkflowException, TaskError
 
 
 LOG = logging.getLogger(__name__)
@@ -111,6 +114,10 @@ class TaskSpec(object):
         self.cancelled_event = Event()
         self.finished_event  = Event()
 
+
+        # Error handling
+        self.error_handlers = []
+
         self._parent._add_notify(self)
         self.data.update(self.defines)
         assert self.id is not None
@@ -194,6 +201,9 @@ class TaskSpec(object):
         self.outputs.append(taskspec)
         taskspec._connect_notify(self)
 
+    def connect_error_handler(self, errhdlr_taskspec):
+        self.error_handlers.append(errhdlr_taskspec)
+
     def follow(self, taskspec):
         """
         Make this task follow the provided one. In other words, this task is
@@ -265,9 +275,71 @@ class TaskSpec(object):
         Called whenever any event happens that may affect the
         state of this task in the workflow. For example, if a predecessor
         completes it makes sure to call this method so we can react.
+
+        This method called by Workflow.complete_next for READY and WAITING tasks 
+        to complete and poll their progress
         """
         my_task._inherit_data()
-        self._update_state_hook(my_task)
+        try:
+            self._update_state_hook(my_task)
+        except TaskError, e:
+            my_task.exc_info = sys.exc_info()
+            my_task._set_state(Task.FAILED)
+
+            for eh in self.error_handlers:
+                if eh.match(my_task, e):
+                    break
+            else:
+                eh = self._parent.default_error_handler
+
+            my_task.internal_data['error_handler'] = eh
+
+            comp_wflow_spec = SpiffWorkflow.specs.WorkflowSpec(my_task.get_name())
+            for ts in eh.outputs:
+                comp_wflow_spec.start.connect(ts)
+
+            comp_wflow = SpiffWorkflow.Workflow(comp_wflow_spec, parent=my_task.workflow.outer_workflow)
+            comp_wflow.completed_event.connect(self._on_compensate_subworkflow_completed, my_task)
+            comp_wflow.task_tree.children[0].complete()
+            #comp_wflow.task_tree.children[0].state = Task.COMPLETED  # better choise
+
+            i = 0
+            for child in comp_wflow.task_tree.children[0].children:
+                my_task.children.insert(i, child)
+                child.parent = my_task
+                i += 1
+
+            for child in comp_wflow.task_tree.children[0].children:
+                child.task_spec._update_state(child)
+
+
+    def _on_compensate_subworkflow_completed(self, subworkflow, my_task):
+        eh = my_task.internal_data.pop('error_handler')
+        eh._on_complete(my_task)
+
+        if eh.resolution == 'complete':
+            my_task._set_state(Task.COMPLETED)
+            for child in my_task.children:
+                if child.task_spec in self.outputs:
+                    # Alright, abusing that hook is just evil but it works.
+                    child.task_spec._update_state_hook(child)
+
+        elif eh.resolution == 'retry':
+            retry_task = Task(my_task.workflow, my_task.task_spec)
+            retry_task.state = Task.FUTURE
+            retry_task.parent = my_task.parent
+            retry_task._sync_children(my_task.task_spec.outputs, Task.FUTURE)
+            index = my_task.parent.children.index(my_task) + 1
+            my_task.parent.children.insert(index, retry_task)
+
+            drop = [child for child in my_task.children if child.task_spec in self.outputs]
+            for child in drop:
+                my_task.children.remove(child)
+
+            #retry_task.task_spec._predict(retry_task)
+            retry_task.task_spec._update_state(retry_task)
+            #retry_task.task_spec._update_state_hook(retry_task)
+
 
     def _update_state_hook(self, my_task):
         """
@@ -289,6 +361,7 @@ class TaskSpec(object):
             return
         self.entered_event.emit(my_task.workflow, my_task)
         my_task._ready()
+
 
     def _on_ready(self, my_task):
         """

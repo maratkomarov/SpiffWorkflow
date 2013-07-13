@@ -35,3 +35,29 @@ class WorkflowException(Exception):
 
 class StorageException(Exception):
     pass
+
+
+class TaskError(Exception):
+    pass
+
+class TimeoutError(TaskError):
+    pass
+
+class ResourceError(TaskError):
+    pass
+
+class WorkItemError(TaskError):
+    pass
+
+class ErrorHandler(object):
+    TASK_FAIL = 0
+    TASK_COMPLETE = 1
+    
+    READY = 0
+    DONE = 1
+
+    def __init__(self, match_expr=None, compensate_taskspec=None):
+        self.match_expr = match_expr
+        self.compensate_taskspec = compensate_taskspec
+        self.state = self.READY
+

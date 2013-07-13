@@ -82,6 +82,10 @@ class PathAttrib(object):
         """
         return serializer._deserialize_pathattrib(cls, s_state)
 
+class Fn(object):
+    def __init__(self, fn):
+        self.fn = fn
+
 
 class Assign(object):
     """
@@ -147,6 +151,8 @@ def valueof(scope, op):
                 return None
             data = data[part]  # move down the path
         return data
+    elif isinstance(op, Fn):
+        return op.fn(scope.data)
     else:
         return op
 

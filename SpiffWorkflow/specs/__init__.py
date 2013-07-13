@@ -20,6 +20,7 @@ from Transform import Transform
 from Trigger import Trigger
 from WorkflowSpec import WorkflowSpec
 from TaskSpec import TaskSpec
+from ErrorHandler import ErrorHandler
 
 import inspect
 __all__ = [name for name, obj in locals().items()

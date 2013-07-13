@@ -80,8 +80,9 @@ class Task(object):
     READY     = 16
     COMPLETED = 32
     CANCELLED = 64
+    FAILED    = 128
 
-    FINISHED_MASK      = CANCELLED | COMPLETED
+    FINISHED_MASK      = CANCELLED | COMPLETED | FAILED
     DEFINITE_MASK      = FUTURE | WAITING | READY | FINISHED_MASK
     PREDICTED_MASK     = FUTURE | LIKELY | MAYBE
     NOT_FINISHED_MASK  = PREDICTED_MASK | WAITING | READY
@@ -93,7 +94,10 @@ class Task(object):
                    CANCELLED: 'CANCELLED',
                    COMPLETED: 'COMPLETED',
                    LIKELY:    'LIKELY',
-                   MAYBE:     'MAYBE'}
+                   MAYBE:     'MAYBE',
+                   FAILED:    'FAILED'}
+
+    exc_info = None
 
     class Iterator(object):
         """
