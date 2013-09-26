@@ -20,7 +20,7 @@ import logging
 from SpiffWorkflow.Task import Task
 from SpiffWorkflow.exceptions import WorkflowException
 from SpiffWorkflow.specs.TaskSpec import TaskSpec
-from SpiffWorkflow.operators import valueof, Attrib, PathAttrib
+from SpiffWorkflow.operators import valueof, Attrib, PathAttrib, FuncAttrib
 from SpiffWorkflow.util import merge_dictionary
 
 try:
@@ -39,7 +39,8 @@ def _eval_args(args, my_task):
     """Parses args and evaluates any Attrib entries"""
     results = []
     for arg in args:
-        if isinstance(arg, Attrib) or isinstance(arg, PathAttrib):
+        if isinstance(arg, Attrib) or isinstance(arg, PathAttrib) \
+                or isinstance(arg, FuncAttrib):
             results.append(valueof(my_task, arg))
         else:
             results.append(arg)
@@ -50,7 +51,8 @@ def _eval_kwargs(kwargs, my_task):
     """Parses kwargs and evaluates any Attrib entries"""
     results = {}
     for kwarg, value in kwargs.iteritems():
-        if isinstance(value, Attrib) or isinstance(value, PathAttrib):
+        if isinstance(value, Attrib) or isinstance(value, PathAttrib) \
+                or isinstance(arg, FuncAttrib):
             results[kwarg] = valueof(my_task, value)
         else:
             results[kwarg] = value
