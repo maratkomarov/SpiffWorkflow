@@ -151,6 +151,7 @@ def valueof(scope, op):
                         extra=dict(data=scope.data))
                 return None
             data = data[part]  # move down the path
+        LOG.debug('valueof(PathAttrib(%s)) => %s', op.path, data)
         return data
     elif isinstance(op, FuncAttrib):
         return op.func(scope)

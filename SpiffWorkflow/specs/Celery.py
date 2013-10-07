@@ -52,7 +52,7 @@ def _eval_kwargs(kwargs, my_task):
     results = {}
     for kwarg, value in kwargs.iteritems():
         if isinstance(value, Attrib) or isinstance(value, PathAttrib) \
-                or isinstance(arg, FuncAttrib):
+                or isinstance(value, FuncAttrib):
             results[kwarg] = valueof(my_task, value)
         else:
             results[kwarg] = value
@@ -76,6 +76,8 @@ def Serializable(o):
 
 
 class Celery(TaskSpec):
+    # FIXME: Handle case when agent receive unregistered task. Now _try_fire got PENDING state forever, and task hangs
+
     """This class implements a celeryd task that is sent to the celery queue for
     completion."""
 
@@ -206,6 +208,7 @@ class Celery(TaskSpec):
         # Get call status (and manually refresh if deserialized)
         if my_task.internal_data.get('deserialized'):
             my_task.internal_data['async_call'].state  # must manually refresh if deserialized
+        LOG.debug('AsyncCall.state: %s', my_task.internal_data['async_call'].state)
         if my_task.internal_data['async_call'].state == 'FAILURE':
             LOG.debug("Async Call for task '%s' failed: %s", 
                     my_task.get_name(), my_task.internal_data['async_call'].info)
@@ -231,7 +234,7 @@ class Celery(TaskSpec):
             # Format result
             if self.result_key:
                 data = data_i = {}
-                path = self.result_key.split('/')
+                path = self.result_key.split('.')
                 for key in path[:-1]:
                     data_i[key] = {}
                     data_i = data_i[key]

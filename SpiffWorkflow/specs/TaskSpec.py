@@ -283,6 +283,8 @@ class TaskSpec(object):
         try:
             self._update_state_hook(my_task)
         except TaskError, e:
+            LOG.exception('Caught task error')
+            
             my_task.exc_info = sys.exc_info()
             my_task._set_state(Task.FAILED)
 
