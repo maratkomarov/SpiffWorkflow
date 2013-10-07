@@ -243,6 +243,8 @@ class Workflow(object):
             task.task_spec._update_state(task)
             if not task._has_state(Task.WAITING):
                 self.last_task = task
+                # XXX: without this children of WAITING celery task never predicted
+                task._sync_children(task.task_spec.outputs)  
                 return True
         return False
 
