@@ -18,7 +18,7 @@ from __future__ import absolute_import
 import logging
 
 from SpiffWorkflow.Task import Task
-from SpiffWorkflow.exceptions import WorkflowException
+from SpiffWorkflow.exceptions import WorkflowException, TaskError
 from SpiffWorkflow.specs.TaskSpec import TaskSpec
 from SpiffWorkflow.operators import valueof, Attrib, PathAttrib, FuncAttrib
 from SpiffWorkflow.util import merge_dictionary
@@ -81,8 +81,8 @@ class Celery(TaskSpec):
     """This class implements a celeryd task that is sent to the celery queue for
     completion."""
 
-    def __init__(self, parent, name, call, call_args=None, queue=None, 
-                result_key=None, merge_results=True, **kwargs):
+    def __init__(self, parent, name, call=None, call_args=None, call_queue=None, call_server_id=None,
+                call_result_key=None, merge_results=True, **kwargs):
         """Constructor.
 
         The args/kwargs arguments support Attrib classes in the parameters for
@@ -104,8 +104,8 @@ class Celery(TaskSpec):
         :param call: The name of the celery task that needs to be called.
         :type  call_args: list
         :param call_args: args to pass to celery task.
-        :type  result_key: str
-        :param result_key: The key to use to store the results of the call in
+        :type  call_result_key: str
+        :param call_result_key: The key to use to store the results of the call in
                 task.data. If None, then dicts are expanded into
                 data and values are stored in 'result'.
         :param merge_results: merge the results in instead of overwriting existing
@@ -117,30 +117,39 @@ class Celery(TaskSpec):
             raise Exception("Unable to import python-celery imports.")
         assert parent  is not None
         assert name    is not None
-        assert call is not None
+        if call is None:
+            call = name
+
         TaskSpec.__init__(self, parent, name, **kwargs)
         self.description = kwargs.pop('description', '')
         self.call = call
         self.args = call_args
-        self.queue = queue
+        self.call_queue = call_queue
+        self.call_server_id = call_server_id
         self.merge_results = merge_results
         skip = 'data', 'defines', 'pre_assign', 'post_assign', 'lock'
         self.kwargs = dict(i for i in kwargs.iteritems() if i[0] not in skip)
-        self.result_key = result_key
+        self.call_result_key = call_result_key
         LOG.debug("Celery task '%s' created to call '%s'", name, call)
 
     def _send_call(self, my_task):
         """Sends Celery asynchronous call and stores async call information for
         retrieval laster"""
-        args, kwargs, queue = None, None, None
+        args, kwargs, queue = [], {}, None
         if self.args:
             args = _eval_args(self.args, my_task)
         if self.kwargs:
             kwargs = _eval_kwargs(self.kwargs, my_task)
-        if self.queue:
-            queue = valueof(my_task, self.queue)
+        if self.call_server_id:
+            queue = 'server.{0}'.format(valueof(my_task, self.call_server_id))
+        elif self.call_queue:
+            queue = valueof(my_task, self.call_queue)
         LOG.debug("%s (task id %s) calling %s", self.name, my_task.id,
                 self.call, extra=dict(data=dict(args=args, kwargs=kwargs)))
+        # Add current workflow information
+        kwargs['workflow'] = {
+            'data': my_task.data
+        }
         async_call = current_app().send_task(self.call, args=args, kwargs=kwargs, queue=queue)
         my_task.internal_data['task_id'] = async_call.task_id
         my_task.internal_data['async_call'] = async_call
@@ -181,8 +190,6 @@ class Celery(TaskSpec):
             history.append(my_task.internal_data['task_id'])
             del my_task.internal_data['task_id']
             my_task.internal_data['task_history'] = history
-        if 'task_state' in my_task.internal_data:
-            del my_task.internal_data['task_state']
         if 'error' in my_task.data: # ?
             del my_task.data['error']  #?
         if 'async_call' in my_task.internal_data:
@@ -208,33 +215,43 @@ class Celery(TaskSpec):
         # Get call status (and manually refresh if deserialized)
         if my_task.internal_data.get('deserialized'):
             my_task.internal_data['async_call'].state  # must manually refresh if deserialized
-        LOG.debug('AsyncCall.state: %s', my_task.internal_data['async_call'].state)
-        if my_task.internal_data['async_call'].state == 'FAILURE':
+        async_call = my_task.internal_data['async_call']
+        LOG.debug('AsyncCall.state: %s', async_call.state)
+        if async_call.state == 'FAILURE':
             LOG.debug("Async Call for task '%s' failed: %s", 
-                    my_task.get_name(), my_task.internal_data['async_call'].info)
-            info = {}
-            info['traceback'] = my_task.internal_data['async_call'].traceback
-            info['info'] = Serializable(my_task.internal_data['async_call'].info)
-            info['state'] = my_task.internal_data['async_call'].state
-            my_task.internal_data['task_state'] = info
-        elif my_task.internal_data['async_call'].state == 'RETRY':
-            info = {}
-            info['traceback'] = my_task.internal_data['async_call'].traceback
-            info['info'] = Serializable(my_task.internal_data['async_call'].info)
-            info['state'] = my_task.internal_data['async_call'].state
-            my_task.internal_data['task_state'] = info
-        elif my_task.internal_data['async_call'].ready():
-            result = my_task.internal_data['async_call'].result
-            if isinstance(result, Exception):
+                    my_task.get_name(), async_call.result)
+            my_task.internal_data['error'] = async_call.result
+            if not isinstance(async_call.result, TaskError):
+                raise TaskError(async_call.result)
+            else:
+                raise async_call.result
+
+        elif async_call.state == 'PROGRESS':
+            # currently the console outputs "WAITING" for this state
+            # so we expect to see "WAITING, 50%"
+
+            #try:
+            progress = result["progress"]
+            #except TypeError:
+            #    # WTF, the task was clearly setting meta to dict:
+            #    # progress = result["percentage"]
+            #    # TypeError: string indices must be integers
+            LOG.debug("Meta: %s", meta)
+            LOG.debug("progress=%s, TryFire for '%s' returning False", progress, my_task.get_name())
+            my_task.progress = progress
+
+        elif async_call.ready():
+            result = async_call.result
+            if isinstance(async_call.result, Exception):
                 LOG.warn("Celery call %s failed: %s", self.call, result)
-                my_task.data['error'] = Serializable(result)
+                my_task.data['error'] = result
                 return False
             LOG.debug("Completed celery call %s with result=%s", self.call,
                     result)
             # Format result
-            if self.result_key:
+            if self.call_result_key:
                 data = data_i = {}
-                path = self.result_key.split('.')
+                path = self.call_result_key.split('.')
                 for key in path[:-1]:
                     data_i[key] = {}
                     data_i = data_i[key]
@@ -250,24 +267,9 @@ class Celery(TaskSpec):
             else:
                 my_task.set_data(**data)
             return True
-        elif my_task.internal_data['async_call'].state == 'PROGRESS':
-            # currently the console outputs "WAITING" for this state
-            # so we expect to see "WAITING, 50%"
-            meta = my_task.internal_data['async_call'].result
-            #try:
-            progress = meta["progress"]
-            #except TypeError:
-            #    # WTF, the task was clearly setting meta to dict:
-            #    # progress = meta["percentage"]
-            #    # TypeError: string indices must be integers
-            LOG.debug("Meta: %s", meta)
-            LOG.debug("progress=%s, TryFire for '%s' returning False", progress, my_task.get_name())
-
-            my_task.progress = progress
         else:
             LOG.debug("async_call.ready()=%s. TryFire for '%s' "
-                    "returning False", my_task.internal_data['async_call'].ready(),
-                            my_task.get_name())
+                    "returning False", async_call.ready(), my_task.get_name())
             return False
 
     def _update_state_hook(self, my_task):
