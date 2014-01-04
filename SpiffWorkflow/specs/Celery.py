@@ -148,7 +148,7 @@ class Celery(TaskSpec):
                 self.call, extra=dict(data=dict(args=args, kwargs=kwargs)))
         # Add current workflow information
         kwargs['workflow'] = {
-            'data': my_task.data
+            'data': my_task.workflow.data
         }
         async_call = current_app().send_task(self.call, args=args, kwargs=kwargs, queue=queue)
         my_task.internal_data['task_id'] = async_call.task_id
