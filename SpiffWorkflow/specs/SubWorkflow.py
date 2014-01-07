@@ -106,9 +106,12 @@ class SubWorkflow(TaskSpec):
 
         # Integrate the tree of the subworkflow into the tree of this workflow.
         my_task._sync_children(self.outputs, Task.FUTURE)
-        for child in my_task.children:
-            child.task_spec._update_state(child)
-            child._inherit_data()
+        
+        # This was the cause of https://scalr-labs.atlassian.net/browse/FAM-11
+        #for child in my_task.children:
+        #    child.task_spec._update_state(child)
+        #    child._inherit_data()
+
         for child in subworkflow.task_tree.children:
             my_task.children.insert(0, child)
             child.parent = my_task
@@ -130,6 +133,8 @@ class SubWorkflow(TaskSpec):
         # Assign variables, if so requested.
         for child in my_task.children:
             if child.task_spec in self.outputs:
+                child._inherit_data()
+
                 for assignment in self.out_assign:
                     LOG.debug('Assign {2}.{0} from {3}.{1}'.format(
                         assignment.left_attribute, assignment.right_attribute, 
@@ -137,8 +142,11 @@ class SubWorkflow(TaskSpec):
                     ))
                     assignment.assign(subworkflow, child)
 
-                # Alright, abusing that hook is just evil but it works.
-                child.task_spec._update_state_hook(child)
+                # Alright, abusing that hook is just evil but it works.        
+                try:
+                    child.task_spec._update_state_hook(child)
+                except TaskError, e:
+                    child.task_spec._handle_task_error(child)
 
     def _on_complete_hook(self, my_task):
         # print 'SubWorkflow._on_complete_hook: {0}'.format(my_task)

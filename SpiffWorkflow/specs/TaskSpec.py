@@ -270,7 +270,7 @@ class TaskSpec(object):
             if not child._is_definite():
                 child._set_state(best_state)
 
-    def _update_state(self, my_task):
+    def _update_state(self, my_task, assignments=None):
         """
         Called whenever any event happens that may affect the
         state of this task in the workflow. For example, if a predecessor
@@ -283,38 +283,41 @@ class TaskSpec(object):
         try:
             self._update_state_hook(my_task)
         except TaskError, e:
-            LOG.exception('Caught task error')
-            
-            my_task.exc_info = sys.exc_info()
-            my_task._set_state(Task.FAILED)
+            self._handle_task_error(my_task)
 
-            for eh in self.error_handlers:
-                if eh.match(my_task, e):
-                    break
-            else:
-                eh = self._parent.default_error_handler
+    def _handle_task_error(my_task):
+        LOG.exception('Caught task error')
+        
+        my_task.exc_info = sys.exc_info()
+        e = my_task.exc_info[1]
+        my_task._set_state(Task.FAILED)
 
-            my_task.internal_data['error_handler'] = eh
+        for eh in self.error_handlers:
+            if eh.match(my_task, e):
+                break
+        else:
+            eh = self._parent.default_error_handler
 
-            comp_wflow_spec = SpiffWorkflow.specs.WorkflowSpec(my_task.get_name())
-            for ts in eh.outputs:
-                comp_wflow_spec.start.connect(ts)
+        my_task.internal_data['error_handler'] = eh
 
-            comp_wflow = SpiffWorkflow.Workflow(comp_wflow_spec, parent=my_task.workflow.outer_workflow)
-            comp_wflow.completed_event.connect(self._on_compensate_subworkflow_completed, my_task)
-            #comp_wflow.task_tree.children[0].set_data(**my_task.data)
-            comp_wflow.task_tree.children[0].complete()
-            #comp_wflow.task_tree.children[0].state = Task.COMPLETED  # better choise
+        comp_wflow_spec = SpiffWorkflow.specs.WorkflowSpec(my_task.get_name())
+        for ts in eh.outputs:
+            comp_wflow_spec.start.connect(ts)
 
-            i = 0
-            for child in comp_wflow.task_tree.children[0].children:
-                my_task.children.insert(i, child)
-                child.parent = my_task
-                i += 1
+        comp_wflow = SpiffWorkflow.Workflow(comp_wflow_spec, parent=my_task.workflow.outer_workflow)
+        comp_wflow.completed_event.connect(self._on_compensate_subworkflow_completed, my_task)
+        #comp_wflow.task_tree.children[0].set_data(**my_task.data)
+        comp_wflow.task_tree.children[0].complete()
+        #comp_wflow.task_tree.children[0].state = Task.COMPLETED  # better choise
 
-            for child in comp_wflow.task_tree.children[0].children:
-                child.task_spec._update_state(child)
+        i = 0
+        for child in comp_wflow.task_tree.children[0].children:
+            my_task.children.insert(i, child)
+            child.parent = my_task
+            i += 1
 
+        for child in comp_wflow.task_tree.children[0].children:
+            child.task_spec._update_state(child)        
 
     def _on_compensate_subworkflow_completed(self, subworkflow, my_task):
         eh = my_task.internal_data.pop('error_handler')
