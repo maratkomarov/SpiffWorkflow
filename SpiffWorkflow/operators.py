@@ -158,7 +158,7 @@ def valueof(task, op):
         parts = op.path.split('.')
         data, scope = lookup_data(parts[0])
         for part in parts:
-            if part not in data:
+            if not data or part not in data:
                 LOG.debug("PathAttrib('%s') not present in %s data" % 
                         (op.path, scope),
                         extra=dict(data=task.data))

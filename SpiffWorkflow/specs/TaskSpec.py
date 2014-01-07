@@ -302,6 +302,7 @@ class TaskSpec(object):
 
             comp_wflow = SpiffWorkflow.Workflow(comp_wflow_spec, parent=my_task.workflow.outer_workflow)
             comp_wflow.completed_event.connect(self._on_compensate_subworkflow_completed, my_task)
+            #comp_wflow.task_tree.children[0].set_data(**my_task.data)
             comp_wflow.task_tree.children[0].complete()
             #comp_wflow.task_tree.children[0].state = Task.COMPLETED  # better choise
 
