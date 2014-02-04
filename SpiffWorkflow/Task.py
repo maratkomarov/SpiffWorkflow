@@ -80,12 +80,13 @@ class Task(object):
     READY     = 16
     COMPLETED = 32
     CANCELLED = 64
-    FAILED    = 128
+    ERROR     = 128
+    FAILED    = 256
 
     FINISHED_MASK      = CANCELLED | COMPLETED | FAILED
-    DEFINITE_MASK      = FUTURE | WAITING | READY | FINISHED_MASK
+    DEFINITE_MASK      = FUTURE | WAITING | READY | ERROR | FINISHED_MASK
     PREDICTED_MASK     = FUTURE | LIKELY | MAYBE
-    NOT_FINISHED_MASK  = PREDICTED_MASK | WAITING | READY
+    NOT_FINISHED_MASK  = PREDICTED_MASK | WAITING | READY | ERROR
     ANY_MASK           = FINISHED_MASK | NOT_FINISHED_MASK
 
     state_names = {FUTURE:    'FUTURE',
@@ -95,6 +96,7 @@ class Task(object):
                    COMPLETED: 'COMPLETED',
                    LIKELY:    'LIKELY',
                    MAYBE:     'MAYBE',
+                   ERROR:     'ERROR',
                    FAILED:    'FAILED'}
 
     exc_info = None
@@ -184,6 +186,8 @@ class Task(object):
         self.internal_data = {}
         if parent is not None:
             self.parent._child_added_notify(self)
+        if self.workflow.storage:
+            self.workflow.storage.task_updated(self)
 
     def __repr__(self):
         return '<Task object (%s) in state %s at %s>' % (
@@ -215,6 +219,8 @@ class Task(object):
         self.state_history.append(value)
         LOG.debug("Moving '%s' (spec=%s) from %s to %s" % (self.get_name(),
                     self.task_spec.name, old, self.get_state_name()))
+        if self.workflow.storage:
+            self.workflow.storage.task_updated(self)
 
     def _delstate(self):
         del self._state

@@ -282,10 +282,49 @@ class TaskSpec(object):
         my_task._inherit_data()
         try:
             self._update_state_hook(my_task)
-        except TaskError, e:
-            self._handle_task_error(my_task)
+        except TaskError:
+            self._on_error(my_task)
+            #self._handle_task_error(my_task)
 
-    def _handle_task_error(my_task):
+    def _on_error(self, my_task):
+        my_task.exc_info = sys.exc_info()
+        e = my_task.exc_info[1]
+        my_task._set_state(Task.ERROR)
+
+        for eh in self.error_handlers:
+            if eh.match(my_task, e):
+                break
+        else:
+            eh = self._parent.default_error_handler
+        my_task.internal_data['error_handler'] = eh
+
+        def create_subworkflow():
+            wf_spec = SpiffWorkflow.specs.WorkflowSpec(my_task.get_name())
+            for ts in eh.outputs:
+                wf_spec.start.connect(ts) 
+            outer_workflow = my_task.workflow.outer_workflow
+            return SpiffWorkflow.Workflow(wf_spec, parent = outer_workflow)
+
+        def compensator_completed(workflow):
+            raise "Compensator completed!"
+
+        wf = create_subworkflow()
+        wf.completed_event.connect(compensator_completed)
+        my_task.internal_data['error_handler_workflow'] = wf
+
+        my_task._sync_children(wf.spec.start.outputs, Task.FUTURE)
+
+        for child in wf.task_tree.children:
+            my_task.children.insert(0, child)
+            child.parent = my_task
+            child.task_spec._update_state(child)
+
+        print my_task.children
+
+
+
+
+    def _handle_task_error(self, my_task):
         LOG.exception('Caught task error')
         
         my_task.exc_info = sys.exc_info()

@@ -146,7 +146,7 @@ class SubWorkflow(TaskSpec):
                 try:
                     child.task_spec._update_state_hook(child)
                 except TaskError, e:
-                    child.task_spec._handle_task_error(child)
+                    child.task_spec._on_error(child)
 
     def _on_complete_hook(self, my_task):
         # print 'SubWorkflow._on_complete_hook: {0}'.format(my_task)

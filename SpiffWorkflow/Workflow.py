@@ -44,6 +44,7 @@ class Workflow(object):
         self.outer_workflow = kwargs.get('parent', self)
         self.locks = {}
         self.last_task = None
+        self.storage = kwargs.get('storage', getattr(self.outer_workflow, 'storage', None))
         if deserializing:
             assert 'Root' in workflow_spec.task_specs
             root = workflow_spec.task_specs['Root']  # Probably deserialized
