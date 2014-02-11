@@ -40,24 +40,11 @@ class StorageException(Exception):
 class TaskError(Exception):
     pass
 
-class TimeoutError(TaskError):
+class Timeout(TaskError):
     pass
 
-class ResourceError(TaskError):
+class Resource(TaskError):
     pass
 
-class WorkItemError(TaskError):
+class WorkItem(TaskError):
     pass
-
-class ErrorHandler(object):
-    TASK_FAIL = 0
-    TASK_COMPLETE = 1
-    
-    READY = 0
-    DONE = 1
-
-    def __init__(self, match_expr=None, compensate_taskspec=None):
-        self.match_expr = match_expr
-        self.compensate_taskspec = compensate_taskspec
-        self.state = self.READY
-

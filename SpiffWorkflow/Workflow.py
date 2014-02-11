@@ -82,14 +82,16 @@ class Workflow(object):
             return True
         return False
 
-    def is_failed(self):
+
+    def has_failed(self):
         mask = Task.FAILED
         iter = Task.Iterator(self.task_tree, mask)
         try:
             iter.next()
             return True
         except:
-            return False
+            return False        
+
    
     def _get_waiting_tasks(self):
         waiting = Task.Iterator(self.task_tree, Task.WAITING)

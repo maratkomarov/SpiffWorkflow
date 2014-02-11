@@ -17,7 +17,7 @@ import logging
 import os
 
 from SpiffWorkflow.specs.StartTask import StartTask
-from SpiffWorkflow.specs.ErrorHandler import ErrorHandler
+#from SpiffWorkflow.specs.ErrorHandler import ErrorHandler
 
 LOG = logging.getLogger(__name__)
 
@@ -36,7 +36,8 @@ class WorkflowSpec(object):
         self.file = os.path.abspath(filename) if filename else ''
         self.task_specs = dict()
         self.start = StartTask(self)
-        self.default_error_handler = ErrorHandler(self)
+        #self.default_error_handler = ErrorHandler(self)
+        self.default_error_handler = None
 
     def _add_notify(self, task_spec):
         """

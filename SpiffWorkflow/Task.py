@@ -83,7 +83,7 @@ class Task(object):
     ERROR     = 128
     FAILED    = 256
 
-    FINISHED_MASK      = CANCELLED | COMPLETED | FAILED
+    FINISHED_MASK      = CANCELLED | COMPLETED | ERROR | FAILED
     DEFINITE_MASK      = FUTURE | WAITING | READY | ERROR | FINISHED_MASK
     PREDICTED_MASK     = FUTURE | LIKELY | MAYBE
     NOT_FINISHED_MASK  = PREDICTED_MASK | WAITING | READY | ERROR
@@ -165,7 +165,7 @@ class Task(object):
     # Pool for assigning a unique thread id to every new Task.
     thread_id_pool = 0
 
-    def __init__(self, workflow, task_spec, parent=None, state=MAYBE):
+    def __init__(self, workflow, task_spec, parent=None, state=MAYBE, internal_data=None):
         """
         Constructor.
         """
@@ -183,7 +183,7 @@ class Task(object):
         self.thread_id = self.__class__.thread_id_pool
         self.last_state_change = time.time()
         self.data = {}
-        self.internal_data = {}
+        self.internal_data = internal_data or {}
         if parent is not None:
             self.parent._child_added_notify(self)
         if self.workflow.storage:

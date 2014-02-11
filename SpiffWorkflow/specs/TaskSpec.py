@@ -201,8 +201,11 @@ class TaskSpec(object):
         self.outputs.append(taskspec)
         taskspec._connect_notify(self)
 
+
     def connect_error_handler(self, errhdlr_taskspec):
         self.error_handlers.append(errhdlr_taskspec)
+        errhdlr_taskspec._connect_notify(self)
+
 
     def follow(self, taskspec):
         """
@@ -270,7 +273,8 @@ class TaskSpec(object):
             if not child._is_definite():
                 child._set_state(best_state)
 
-    def _update_state(self, my_task, assignments=None):
+
+    def _update_state(self, my_task):
         """
         Called whenever any event happens that may affect the
         state of this task in the workflow. For example, if a predecessor
@@ -284,106 +288,33 @@ class TaskSpec(object):
             self._update_state_hook(my_task)
         except TaskError:
             self._on_error(my_task)
-            #self._handle_task_error(my_task)
+
 
     def _on_error(self, my_task):
-        my_task.exc_info = sys.exc_info()
-        e = my_task.exc_info[1]
+        exc_info = my_task.exc_info = sys.exc_info()
+        LOG.warn("'%s' error: %s", my_task.get_name(), exc_info[1])
         my_task._set_state(Task.ERROR)
 
         for eh in self.error_handlers:
-            if eh.match(my_task, e):
+            if eh.match(my_task, exc_info[1]):
                 break
         else:
             eh = self._parent.default_error_handler
-        my_task.internal_data['error_handler'] = eh
+        if not eh:
+            return
+        eh.select(my_task)
 
-        def create_subworkflow():
-            wf_spec = SpiffWorkflow.specs.WorkflowSpec(my_task.get_name())
-            for ts in eh.outputs:
-                wf_spec.start.connect(ts) 
-            outer_workflow = my_task.workflow.outer_workflow
-            return SpiffWorkflow.Workflow(wf_spec, parent = outer_workflow)
-
-        def compensator_completed(workflow):
-            raise "Compensator completed!"
-
-        wf = create_subworkflow()
-        wf.completed_event.connect(compensator_completed)
-        my_task.internal_data['error_handler_workflow'] = wf
-
-        my_task._sync_children(wf.spec.start.outputs, Task.FUTURE)
-
-        for child in wf.task_tree.children:
-            my_task.children.insert(0, child)
-            child.parent = my_task
-            child.task_spec._update_state(child)
-
-        print my_task.children
-
-
-
-
-    def _handle_task_error(self, my_task):
-        LOG.exception('Caught task error')
-        
-        my_task.exc_info = sys.exc_info()
-        e = my_task.exc_info[1]
-        my_task._set_state(Task.FAILED)
-
-        for eh in self.error_handlers:
-            if eh.match(my_task, e):
-                break
-        else:
-            eh = self._parent.default_error_handler
-
-        my_task.internal_data['error_handler'] = eh
-
-        comp_wflow_spec = SpiffWorkflow.specs.WorkflowSpec(my_task.get_name())
-        for ts in eh.outputs:
-            comp_wflow_spec.start.connect(ts)
-
-        comp_wflow = SpiffWorkflow.Workflow(comp_wflow_spec, parent=my_task.workflow.outer_workflow)
-        comp_wflow.completed_event.connect(self._on_compensate_subworkflow_completed, my_task)
-        #comp_wflow.task_tree.children[0].set_data(**my_task.data)
-        comp_wflow.task_tree.children[0].complete()
-        #comp_wflow.task_tree.children[0].state = Task.COMPLETED  # better choise
-
+        eh_task = my_task._add_child(eh)
+        # Move eh_task to the childs top
+        my_task.children.pop()
         i = 0
-        for child in comp_wflow.task_tree.children[0].children:
-            my_task.children.insert(i, child)
-            child.parent = my_task
-            i += 1
-
-        for child in comp_wflow.task_tree.children[0].children:
-            child.task_spec._update_state(child)        
-
-    def _on_compensate_subworkflow_completed(self, subworkflow, my_task):
-        eh = my_task.internal_data.pop('error_handler')
-        eh._on_complete(my_task)
-
-        if eh.resolution == 'complete':
-            my_task._set_state(Task.COMPLETED)
-            for child in my_task.children:
-                if child.task_spec in self.outputs:
-                    # Alright, abusing that hook is just evil but it works.
-                    child.task_spec._update_state_hook(child)
-
-        elif eh.resolution == 'retry':
-            retry_task = Task(my_task.workflow, my_task.task_spec)
-            retry_task.state = Task.FUTURE
-            retry_task.parent = my_task.parent
-            retry_task._sync_children(my_task.task_spec.outputs, Task.FUTURE)
-            index = my_task.parent.children.index(my_task) + 1
-            my_task.parent.children.insert(index, retry_task)
-
-            drop = [child for child in my_task.children if child.task_spec in self.outputs]
-            for child in drop:
-                my_task.children.remove(child)
-
-            #retry_task.task_spec._predict(retry_task)
-            retry_task.task_spec._update_state(retry_task)
-            #retry_task.task_spec._update_state_hook(retry_task)
+        for child in my_task.children:
+            if child._is_finished():
+                i += 1
+            else:
+                break
+        my_task.children.insert(i, eh_task)
+        eh._update_state(eh_task)
 
 
     def _update_state_hook(self, my_task):
