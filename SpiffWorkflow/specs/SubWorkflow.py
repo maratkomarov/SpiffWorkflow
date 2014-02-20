@@ -16,13 +16,21 @@
 import os
 from SpiffWorkflow.Task import Task
 from SpiffWorkflow.exceptions import WorkflowException
-from SpiffWorkflow.operators import valueof
+from SpiffWorkflow.operators import valueof, FuncAttrib
 from SpiffWorkflow.specs.TaskSpec import TaskSpec
 import SpiffWorkflow
 
 import logging
 
 LOG = logging.getLogger(__name__)
+
+def _eval_assign(assign, scope):
+    if isinstance(assign, FuncAttrib):
+        return valueof(scope, assign)
+    else:
+        return dict((left, valueof(scope, right)) 
+                for left, right in assign.items())
+
 
 class SubWorkflow(TaskSpec):
     """
@@ -51,9 +59,9 @@ class SubWorkflow(TaskSpec):
         :param name: The name of the task spec.
         :type  file: str
         :param file: The name of a file containing a workflow.
-        :type  in_assign: list(str)
+        :type  in_assign: dict(str: Operator | str)
         :param in_assign: The names of data fields to carry over.
-        :type  out_assign: list(str)
+        :type  out_assign: dict(str: Operator | str)
         :param out_assign: The names of data fields to carry back.
         :type  kwargs: dict
         :param kwargs: See L{SpiffWorkflow.specs.TaskSpec}.
@@ -62,8 +70,8 @@ class SubWorkflow(TaskSpec):
         assert name is not None
         super(SubWorkflow, self).__init__(parent, name, **kwargs)
         self.file       = None
-        self.in_assign  = in_assign is not None and in_assign or []
-        self.out_assign = out_assign is not None and out_assign or []
+        self.in_assign  = in_assign or {}
+        self.out_assign = out_assign or {}
         if file is not None:
             dirname   = os.path.dirname(parent.file)
             self.file = os.path.abspath(os.path.join(dirname, file))
@@ -118,29 +126,39 @@ class SubWorkflow(TaskSpec):
 
         my_task._set_internal_data(subworkflow = subworkflow)
 
+
     def _on_ready_hook(self, my_task):
         # Assign variables, if so requested.
         subworkflow = my_task._get_internal_data('subworkflow')
+        data = _eval_assign(self.in_assign, my_task)
+
+        LOG.debug("Assign data to {0} and it's children: {1}".format(subworkflow, data))
+        subworkflow.data = data
         for child in subworkflow.task_tree.children:
-            for assignment in self.in_assign:
-                assignment.assign(my_task, child)
+            child.set_data(**data)
 
         self._predict(my_task)
         for child in subworkflow.task_tree.children:
             child.task_spec._update_state(child)
 
     def _on_subworkflow_completed(self, subworkflow, my_task):
+        data = _eval_assign(self.out_assign, subworkflow)
+
         # Assign variables, if so requested.
         for child in my_task.children:
             if child.task_spec in self.outputs:
                 child._inherit_data()
+                # assign out
+                child.set_data(**data)
 
+                '''
                 for assignment in self.out_assign:
                     LOG.debug('Assign {2}.{0} from {3}.{1}'.format(
                         assignment.left_attribute, assignment.right_attribute, 
                         child, subworkflow
                     ))
                     assignment.assign(subworkflow, child)
+                '''
 
                 # Alright, abusing that hook is just evil but it works.        
                 try:

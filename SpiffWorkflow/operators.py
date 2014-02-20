@@ -131,45 +131,53 @@ class Assign(object):
         to_obj.set_data(**{str(self.left_attribute): right})
 
 
-def valueof(task, op):
-    def lookup_data(name):
-        if name in task.data:
-            data = task.data
-            scope = "task '{0}'".format(task.get_name())
-        else:
-            data = task.workflow.data
-            scope = "workflow '{0}'".format(task.workflow.get_name()) 
-        return data, scope    
+def valueof(task_or_workflow, op):
+    scope = task_or_workflow
+    assert hasattr(scope, 'data')
 
-    if op is None:
-        return None
-    elif isinstance(op, Attrib):
-        data, scope = lookup_data(op.name)
-        if op.name not in data:
-            LOG.debug("Attrib('%s') not present in %s data" %
-                    (op.name, scope))
+    def lookup_data(name):
+        if name in scope.data:
+            data = scope.data
+            title = "scope '{0}'".format(scope.get_name())
+        elif hasattr(scope, 'workflow'):
+            data = scope.workflow.data
+            title = "workflow '{0}'".format(scope.workflow.get_name()) 
+        else:
+            raise LookupError()
+        return data, title    
+
+    try:
+        if op is None:
             return None
-        ret = data[op.name]
-        LOG.debug('valueof(Attrib(%s)) => %s', op.name, ret)
-        return ret
-    elif isinstance(op, PathAttrib):
-        if not op.path:
-            return None
-        parts = op.path.split('.')
-        data, scope = lookup_data(parts[0])
-        for part in parts:
-            if not data or part not in data:
-                LOG.debug("PathAttrib('%s') not present in %s data" % 
-                        (op.path, scope),
-                        extra=dict(data=task.data))
+        elif isinstance(op, Attrib):
+            data, title = lookup_data(op.name)
+            if op.name not in data:
+                LOG.debug("Attrib('%s') not present in %s data" %
+                        (op.name, title))
                 return None
-            data = data[part]  # move down the path
-        LOG.debug('valueof(PathAttrib(%s)) => %s', op.path, data)
-        return data
-    elif isinstance(op, FuncAttrib):
-        return op.func(task)
-    else:
-        return op
+            ret = data[op.name]
+            LOG.debug('valueof(Attrib(%s)) => %s', op.name, ret)
+            return ret
+        elif isinstance(op, PathAttrib):
+            if not op.path:
+                return None
+            parts = op.path.split('.')
+            data, title = lookup_data(parts[0])
+            for part in parts:
+                if not data or part not in data:
+                    LOG.debug("PathAttrib('%s') not present in %s data" % 
+                            (op.path, title),
+                            extra=dict(data=scope.data))
+                    return None
+                data = data[part]  # move down the path
+            LOG.debug('valueof(PathAttrib(%s)) => %s', op.path, data)
+            return data
+        elif isinstance(op, FuncAttrib):
+            return op.func(scope)
+        else:
+            return op
+    except LookupError:
+        return None
 
 
 class Operator(object):

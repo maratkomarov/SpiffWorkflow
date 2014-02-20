@@ -542,11 +542,21 @@ class Task(object):
         """
         Inherits the data from the parent.
         """
+        # LOG.debug('workflow: %s', self.workflow)
+        # LOG.debug('parent.workflow: %s', self.parent.workflow)
+        # if self.parent.workflow != self.workflow:
+        #     msg = ("'{0}' doesn't interits data from '{1}': "
+        #             "they belongs to different workflow objects"
+        #             ).format(self.get_name(), self.parent.get_name())
+        #     LOG.debug(msg)
+        #     return
+
         LOG.debug("'%s' inheriting data from '%s'" % (self.get_name(),
                 self.parent.get_name()),
                 extra=dict(data=self.parent.data))
-        #LOG.debug('data: %s', self.parent.data)
         self.set_data(**self.parent.data)
+        LOG.debug('data: %s', self.data)
+        LOG.debug('workflow data: %s', self.workflow.data)
 
     def get_data(self, name, default=None):
         """

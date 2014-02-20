@@ -18,3 +18,10 @@ Mailing List: http://groups.google.com/group/spiff-devel/
 
 
 
+Data Patterns Implementation
+----------------------------
+
+Workflow.data - implements [Workflow Data](http://www.workflowpatterns.com/patterns/data/visibility/wdp7.php)
+SubWorkflow.in_assign, out_assign - implements [Block Data](http://www.workflowpatterns.com/patterns/data/visibility/wdp2.php)
+Task.data - implements [Task Data](http://www.workflowpatterns.com/patterns/data/visibility/wdp1.php)
+Error handler is executed in a subworkflow. It's block Data inherited from failed task, and not comes back to parent workflow
