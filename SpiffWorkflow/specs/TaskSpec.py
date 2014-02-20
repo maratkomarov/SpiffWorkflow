@@ -283,7 +283,8 @@ class TaskSpec(object):
         This method called by Workflow.complete_next for READY and WAITING tasks 
         to complete and poll their progress
         """
-        my_task._inherit_data()
+        if my_task.parent.workflow == my_task.workflow:
+            my_task._inherit_data()
         try:
             self._update_state_hook(my_task)
         except TaskError:
