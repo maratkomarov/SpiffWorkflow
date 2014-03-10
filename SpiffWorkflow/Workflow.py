@@ -29,7 +29,7 @@ class Workflow(object):
     A Workflow is also the place that holds the data of a running workflow.
     """
 
-    def __init__(self, workflow_spec, deserializing=False, **kwargs):
+    def __init__(self, workflow_spec, deserializing=False, task_class=None, **kwargs):
         """
         Constructor.
 
@@ -44,7 +44,13 @@ class Workflow(object):
         self.outer_workflow = kwargs.get('parent', self)
         self.locks = {}
         self.last_task = None
-        self.storage = kwargs.get('storage', getattr(self.outer_workflow, 'storage', None))
+        if task_class:
+            self.task_class = task_class
+        else:
+            if 'parent' in kwargs:
+                self.task_class = kwargs['parent'].task_class
+            else:
+                self.task_class = Task
         if deserializing:
             assert 'Root' in workflow_spec.task_specs
             root = workflow_spec.task_specs['Root']  # Probably deserialized
@@ -53,7 +59,7 @@ class Workflow(object):
                 root = workflow_spec.task_specs['Root']
             else:
                 root = specs.Simple(workflow_spec, 'Root')
-        self.task_tree = Task(self, root)
+        self.task_tree = self.task_class(self, root)
         self.success = True
         self.debug = False
 

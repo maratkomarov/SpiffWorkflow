@@ -15,10 +15,12 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 import logging
 import sys
+import traceback
 
 
 import SpiffWorkflow
 from SpiffWorkflow.util.event import Event
+from SpiffWorkflow.operators import valueof
 from SpiffWorkflow.Task import Task
 from SpiffWorkflow.exceptions import WorkflowException, TaskError
 
@@ -93,7 +95,7 @@ class TaskSpec(object):
         assert name   is not None
         self._parent     = parent
         self.id          = None
-        self.name        = str(name)
+        self.name        = name
         self.description = kwargs.get('description', '')
         self.inputs      = []
         self.outputs     = []
@@ -189,6 +191,9 @@ class TaskSpec(object):
         :param default: Returned if the data field is not defined.
         """
         return self.data.get(name, default)
+
+    def get_name_for(self, task):
+        return str(valueof(task, self.name))
 
     def connect(self, taskspec):
         """
@@ -331,7 +336,7 @@ class TaskSpec(object):
         if my_task._is_predicted():
             self._predict(my_task)
         LOG.debug("'%s'._update_state_hook says parent (%s, state=%s) "
-                "is_finished=%s" % (self.name, my_task.parent.get_name(),
+                "is_finished=%s" % (self.get_name_for(my_task), my_task.parent.get_name(),
                 my_task.parent.get_state_name(),
                 my_task.parent._is_finished()))
         if not my_task.parent._is_finished():

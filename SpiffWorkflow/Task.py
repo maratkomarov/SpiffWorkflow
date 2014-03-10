@@ -186,12 +186,11 @@ class Task(object):
         self.internal_data = internal_data or {}
         if parent is not None:
             self.parent._child_added_notify(self)
-        if self.workflow.storage:
-            self.workflow.storage.task_updated(self)
+
 
     def __repr__(self):
         return '<Task object (%s) in state %s at %s>' % (
-            self.task_spec.name,
+            self.task_spec.get_name_for(self),
             self.get_state_name(),
             hex(id(self)))
 
@@ -218,9 +217,9 @@ class Task(object):
                     old, self.get_state_name()))
         self.state_history.append(value)
         LOG.debug("Moving '%s' (spec=%s) from %s to %s" % (self.get_name(),
-                    self.task_spec.name, old, self.get_state_name()))
-        if self.workflow.storage:
-            self.workflow.storage.task_updated(self)
+                    self.task_spec.get_name_for(self), old, self.get_state_name()))
+        return True
+
 
     def _delstate(self):
         del self._state
@@ -310,7 +309,7 @@ class Task(object):
         if self._is_predicted() and state & self.PREDICTED_MASK == 0:
             msg = 'Attempt to add non-predicted child to predicted task'
             raise WorkflowException(self.task_spec, msg)
-        task = Task(self.workflow, task_spec, self, state=state)
+        task = self.workflow.task_class(self.workflow, task_spec, self, state=state)
         task.thread_id = self.thread_id
         if state == self.READY:
             task._ready()
@@ -488,7 +487,7 @@ class Task(object):
         self.task_spec._on_ready(self)
 
     def get_name(self):
-        return str(self.task_spec.name)
+        return str(self.task_spec.get_name_for(self))
 
     def get_description(self):
         return str(self.task_spec.description)

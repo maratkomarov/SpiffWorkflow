@@ -138,22 +138,21 @@ def valueof(task_or_workflow, op):
     def lookup_data(name):
         if name in scope.data:
             data = scope.data
-            title = "scope '{0}'".format(scope.get_name())
+            #title = "scope '{0}'".format(scope.task_spec.name)  # don't do task.get_name() cause you'll get recursion
         elif hasattr(scope, 'workflow'):
             data = scope.workflow.data
-            title = "workflow '{0}'".format(scope.workflow.get_name()) 
+            #title = "workflow '{0}'".format(scope.workflow.get_name()) 
         else:
             raise LookupError()
-        return data, title    
+        return data    
 
     try:
         if op is None:
             return None
         elif isinstance(op, Attrib):
-            data, title = lookup_data(op.name)
+            data = lookup_data(op.name)
             if op.name not in data:
-                LOG.debug("Attrib('%s') not present in %s data" %
-                        (op.name, title))
+                LOG.debug("Attrib('%s') not present in scope data", op.name)
                 return None
             ret = data[op.name]
             LOG.debug('valueof(Attrib(%s)) => %s', op.name, ret)
@@ -162,11 +161,10 @@ def valueof(task_or_workflow, op):
             if not op.path:
                 return None
             parts = op.path.split('.')
-            data, title = lookup_data(parts[0])
+            data = lookup_data(parts[0])
             for part in parts:
                 if not data or part not in data:
-                    LOG.debug("PathAttrib('%s') not present in %s data" % 
-                            (op.path, title),
+                    LOG.debug("PathAttrib('%s') not present in scope data", op.path,
                             extra=dict(data=scope.data))
                     return None
                 data = data[part]  # move down the path
