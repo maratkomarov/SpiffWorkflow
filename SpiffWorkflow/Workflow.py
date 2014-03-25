@@ -240,8 +240,7 @@ class Workflow(object):
             try:
                 iter = Task.Iterator(self.last_task, Task.READY)
                 next = iter.next()
-            except:
-                LOG.exception('Caught exception in iterator loop')
+            except StopIteration:
                 next = None
 
             self.last_task = None
