@@ -77,7 +77,7 @@ class SubWorkflow(TaskSpec):
             self.file = os.path.abspath(os.path.join(dirname, file))
             if not serializer_cls:
                 if self.file.endswith('.wf'):
-                    from fam.workflow_ext.dsl import DslSerializer
+                    from server.workflow_ext.dsl import DslSerializer
                     serializer_cls = DslSerializer
                 else:
                     from SpiffWorkflow.storage import XmlSerializer
